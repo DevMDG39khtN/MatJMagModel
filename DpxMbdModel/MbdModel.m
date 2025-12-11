@@ -33,6 +33,7 @@ classdef MbdModel < handle
 		vIdqABs
 		vIds
 		vIqs
+		thE
 		cvIdqs
 		rdIdIqs
 	end
@@ -120,22 +121,12 @@ classdef MbdModel < handle
 	
 		%% 補間mapデータ作成
 		function GenMap(o, tDat, tIdqs, cmIdqs, mdFlg, i, isDef)
-			% isDef = o.sttSet(mdFlg);
-			% if any(isDef,"all")
-			% 	[rsA, csA, rsB, csB] = ind2sub(find(isDef), o.szMapIdqABs);
-			% end
-			% 
 			for id1 = 1:size(tDat, 1)			% データ軸次元
 				for id3 = 1:size(tDat, 3)		% ２重系電流次元
-					fprintf('>>>>>> [%04d]:Data Ax[%3d]- Side[%3d]]\n', i, id1, id3)
+					% fprintf('>>>>>> [%04d]:Data Ax[%3d]- Side[%3d]]\n', i, id1, id3);
 					% nc = 0;
 					for id2 = 1:size(tDat, 2)	% 電気角次元 
-						tdv = squeeze(tDat(id1, id2, id3, :));
-						% mds = squeeze(o.map{i}(id1, id2, id3, :,:,:,:));
-						% if any(~isnan(mds(mdFlg)), "all")
-						% 	warning('Already Defined map');
-						% 	nzd=reshape(mds(mdFlg),size(mds,1:2));
-						% end
+						tdv = squeeze(tDat(id1, id2, id3, :)); 
 						tIds = tIdqs(:, 1); tIqs = tIdqs(:, 2);
 						sfn = scatteredInterpolant(tIds, tIqs, tdv, "natural");
 						mdv = sfn(cmIdqs{1}, cmIdqs{2});
@@ -154,14 +145,12 @@ classdef MbdModel < handle
 							end
 						end
 						% 重複データを削除して保存               
-						% o.map{i}(id1, id2, id3, mdFlg) = mdv(:);
 						tf = mdFlg & ~isDef; 
 						mdva=mdv(:);
 						o.map{i}(id1, id2, id3, tf) = mdva(~isDef0);
 					end
 				end
 			end
-			% o.sttSet(mdFlg) = true;
 			% 
 		end
 
@@ -176,20 +165,16 @@ classdef MbdModel < handle
 				tvIdqABs = vIdqs(isTgt,:);			% 補間用解析結果Idq
 			else
 				tvIdqABs = vmIdqABs(isTgt,:);			% 補間用解析結果Idq軸			
-				% fds = reshape(isTgt, size(o.sttSet));
 			end
 			tDats = o.ExtractTgtData(isTgt, isMap);		% 補間用解析結果データ
 			[cmIdqs, tmIdqABs, tids] = o.SetTgtIdqAxis(tvIdqABs);	% 生成マップIdq軸
 
 			mdFlg = ismembertol(vmIdqABs, tmIdqABs, o.eps, 'ByRows',true);
 
-			% isDef = o.sttSet(mdFlg);
-			% if any(isDef,"all")
-			% 	[rsA, csA, rsB, csB] = ind2sub(find(isDef), o.szMapIdqABs);
-			% end
 			isDef = o.sttSet(:) & mdFlg;
 			th = o.ax(1,:); % o.ax 2 x 角度分解能
-			for i = 1:length(tDats)
+			% 各解析結果毎計算
+			for i = 1:length(tDats)	
 				tDat = tDats{i};
 				ndt = ndims(tDat); 
 				if  ndt > 2
@@ -214,6 +199,9 @@ classdef MbdModel < handle
 				end
 
 				o.GenMap(tdt, tvIdqABs(:,tids(1:2)), cmIdqs, mdFlg, i, isDef);
+				if i==2
+					dummy = 0;
+				end
 			end
 			o.sttSet(mdFlg) = true;
 		end
@@ -353,12 +341,6 @@ classdef MbdModel < handle
 		end
 
 		function vIdqs = get.vMapIdqABs(o)
-			% vIds = o.xIdms; vIqs = o.xIqms;
-			% cvIdqs={vIds, vIqs, vIds, vIqs};
-			% 
-			% cmIdqABs=cell(size(cvIdqs));
-			% [cmIdqABs{[4,3,2,1]}]=ndgrid(cvIdqs{[2,1,4,3]});
-			% vIdqs = reshape(permute(cat(5, cmIdqABs{:}),[5,1:4]), 4,[])';
 			vIdqs = reshape(permute(cat(5, o.cmMapIdqABs{:}),[5,1:4]), 4,[])';
 		end
 
@@ -371,6 +353,10 @@ classdef MbdModel < handle
 			cIdqs={dIds, dIqs, dIds, dIqs};
 
 			szv = cellfun(@length, cIdqs([2,1,4,3]));
+		end
+
+		function v = get.thE(o)
+			v = o.ax(1,:)';
 		end
 
 		function cvs = get.cvIdqs(o)
