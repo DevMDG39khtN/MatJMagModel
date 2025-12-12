@@ -1,0 +1,150 @@
+{
+  // 仮想環境 D:\_CmnWk\_PyEnvs\.envJMagPy381
+    "files.eol": "\n",
+    "terminal.integrated.env.windows": {
+        "PYTHONPATH": "D:\\_App\\CAE\\JMag\\Designer23.0;${workspaceFolder}"
+      },
+    "python.analysis.extraPaths": [
+      "D:\\_App\\CAE\\JMag\\Designer23.0"
+    ],
+    "python.autoComplete.extraPaths": [
+      "D:\\_App\\CAE\\JMag\\Designer23.0"
+    ],
+    "python.analysis.autoImportCompletions": true,
+    "python-envs.pythonProjects": [],
+
+    "python.terminal.executeInFileDir": true,
+
+    "terminal.integrated.defaultProfile.windows": "Command Prompt",
+
+    "editor.rulers": [90],
+
+    "debug.terminal.clearBeforeReusing": true,
+    "debug.allowBreakpointsEverywhere": true,
+
+    // "debug.console.historyLength": 20000,         // Debug Console の履歴行数（デフォルトは小さい）
+    "terminal.integrated.scrollback": 20000,
+
+    // デバッガーの安定性を向上（有効な設定のみ）
+    "python.experiments.enabled": false,
+    "debug.console.acceptSuggestionOnEnter": "off",
+    "debug.focusWindowOnBreak": false,
+    "debug.showInlineBreakpointCandidates": false,
+    "debug.showSubSessionsInToolBar": false,
+    
+    // Pylance（言語サーバー）の設定
+    "python.analysis.autoSearchPaths": true,
+    "python.analysis.diagnosticMode": "workspace",
+    "python.analysis.typeCheckingMode": "basic",
+    "cSpell.words": [
+      "allclose",
+      "Amob",
+      "arctan",
+      "argmin",
+      "ascontiguousarray",
+      "Asys",
+      "axhline",
+      "axvline",
+      "Bsys",
+      "Clms",
+      "Conds",
+      "Datas",
+      "Dats",
+      "Dplx",
+      "dtns",
+      "eqns",
+      "iafws",
+      "iasv",
+      "idqa",
+      "Idqs",
+      "idqv",
+      "interp",
+      "Intv",
+      "Ironloss",
+      "jmag",
+      "Jprj",
+      "jproj",
+      "kwar",
+      "levelname",
+      "lexsort",
+      "Lmts",
+      "lnked",
+      "Lpji",
+      "Mdls",
+      "nargout",
+      "newaxis",
+      "Nrpm",
+      "offv",
+      "Ords",
+      "Prjs",
+      "prms",
+      "pydeps",
+      "rgted",
+      "rtdo",
+      "rtol",
+      "Stds",
+      "tobytes",
+      "usersubroutine",
+      "vdls",
+      "Vtrm",
+      "wcswidth",
+      "xlabel",
+      "ylabel"
+    ],
+    "better-comments.tags": [
+      {
+        "tag": "!",
+        "color": "#FF2D00",
+        "strikethrough": false,
+        "underline": false,
+        "backgroundColor": "transparent",
+        "bold": false,
+        "italic": false
+      },
+      {
+        "tag": "?",
+        "color": "#3498DB",
+        "strikethrough": false,
+        "underline": false,
+        "backgroundColor": "transparent",
+        "bold": false,
+        "italic": false
+      },
+      {
+        "tag": "//",
+        "color": "#474747",
+        "strikethrough": true,
+        "underline": false,
+        "backgroundColor": "transparent",
+        "bold": false,
+        "italic": false
+      },
+      {
+        "tag": "todo",
+        "color": "#FF8C00",
+        "strikethrough": false,
+        "underline": false,
+        "backgroundColor": "transparent",
+        "bold": false,
+        "italic": false
+      },
+      {
+        "tag": "fixme",
+        "color": "#FF8C00",
+        "strikethrough": false,
+        "underline": false,
+        "backgroundColor": "transparent",
+        "bold": false,
+        "italic": false
+      },
+      {
+        "tag": "*",
+        "color": "#98C379",
+        "strikethrough": false,
+        "underline": false,
+        "backgroundColor": "transparent",
+        "bold": false,
+        "italic": false
+      }
+    ]
+}

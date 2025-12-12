@@ -1,0 +1,53 @@
+{
+    // IntelliSense を使用して利用可能な属性を学べます。
+    // 既存の属性の説明をホバーして表示します。
+    // 詳細情報は次を確認してください: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Python デバッガー: 現在のファイル",
+            "type": "debugpy",
+            "request": "launch",
+            // "program": "${file}",
+            // "module": "TestJMag001", // モジュールとして実行
+            
+            "module": "TestJMag003_AnalysisData", // モジュールとして実行
+            // "module": "TestJMag002_IdqConds", // モジュールとして実行
+            // "module": "main", // モジュールとして実行
+            "console": "integratedTerminal",
+
+            "justMyCode": false,
+            // "timeout": 0,
+            "subProcess": true,
+            "redirectOutput": true,
+            "showReturnValue": true,
+            "stopOnEntry": false,
+            "args": [],
+            "env": {
+                "PYTHONPATH": "D:\\_App\\CAE\\JMag\\Designer23.0;${workspaceFolder}",
+                "PYTHONUNBUFFERED": "1"  // 出力バッファリングを無効化
+            },
+            "cwd": "${workspaceFolder}",
+            // デバッグ時の追加設定
+            "python": "${command:python.interpreterPath}",
+            "internalConsoleOptions": "neverOpen",
+            // "debugOptions": [],
+            // // ウォッチドッグタイマーを無効化
+            // "attachPydevdSourceMap": false
+            // "debugOptions": [
+            //     "DebugStdLib"
+            // ]
+        }
+    ]
+    // {
+    //     "name": "Python デバッガー: 現在のファイル",
+    //     "type": "debugpy",
+    //     "request": "launch",
+    //     // "program": "${file}",
+    //     "module": "main", // モジュールとして実行
+    //     "console": "integratedTerminal",
+    //     // "env": {
+    //     //     "PYTHONPATH": "D:\\_App\\CAE\\JMag\\Designer23.1;",
+    //     // }
+    // }
+ }

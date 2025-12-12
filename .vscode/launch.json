@@ -1,0 +1,34 @@
+{
+    // IntelliSense を使用して利用可能な属性を学べます。
+    // 既存の属性の説明をホバーして表示します。
+    // 詳細情報は次を確認してください: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Python デバッガー: 現在のファイル",
+            "type": "debugpy",
+            "request": "launch",
+            // "program": "${file}",
+            // "module": "IaSet", // モジュールとして実行
+            "module": "MdlDef", // モジュールとして実行
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "subProcess": true,
+            "redirectOutput": true,
+            "showReturnValue": true,
+            "stopOnEntry": false,
+            "args": [],
+            "env": {
+                "PYTHONPATH": "D:\\_App\\CAE\\JMag\\Designer23.0;${workspaceFolder}",
+                "PYTHONUNBUFFERED": "1",
+                // Qt警告を無効化する環境変数を追加
+                "PYDEVD_DISABLE_FILE_VALIDATION": "1",
+                "MPLBACKEND": "Agg",
+                "PYDEVD_USE_FRAME_EVAL": "NO"
+            },
+            "cwd": "${workspaceFolder}",
+            "python": "${command:python.interpreterPath}",
+            "internalConsoleOptions": "neverOpen"
+        }
+    ]
+}

@@ -1,0 +1,27 @@
+{
+    // IntelliSense を使用して利用可能な属性を学べます。
+    // 既存の属性の説明をホバーして表示します。
+    // 詳細情報は次を確認してください: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Python デバッガー: 軽量モード",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "TestJMag003_AnalysisData",
+            "console": "integratedTerminal",
+            "justMyCode": true,  // サードパーティライブラリを除外
+            "subProcess": false, // サブプロセスデバッグを無効化
+            "redirectOutput": false, // 出力リダイレクトを無効化
+            "showReturnValue": false, // 戻り値表示を無効化
+            "stopOnEntry": false,
+            "args": [],
+            "env": {
+                "PYTHONPATH": "D:\\_App\\CAE\\JMag\\Designer23.0;${workspaceFolder}",
+                "PYTHONUNBUFFERED": "1"
+            },
+            "cwd": "${workspaceFolder}",
+            "python": "${command:python.interpreterPath}"
+        }
+    ]
+}
