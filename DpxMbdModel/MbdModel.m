@@ -1,9 +1,12 @@
-classdef MbdModel < handle
+classdef MbdModel < handle & matlab.mixin.Copyable
 	properties(Constant)
 		xIds = [-6000:500:-1500, -1200:100:200, 500:500:6000];
 		xIqs = [0:100:1200, 1500:500:6000];
 		xIdms = [-6000:1000:-1500, -1200:200:200, 1000:1000:6000];
 		xIqms = [0:200:1200, 2000:1000:6000];
+
+		datNames = ["Torque", "Current", "Flux", "Ph  Vlt", "Trm Vlt" ...
+									, "Ph  Flx Vlt", "Trm Flx Vlt"]
 	end
     properties(SetAccess = immutable)
 		ax		% axis : ([thera, time], period]
@@ -25,12 +28,14 @@ classdef MbdModel < handle
 
 	properties(Dependent)
 		szMapIdqABs
-		vMapIdqABs
-		cmMapIdqABs
+		vMapIqdABs
+		cmMapIqdABs
 		vFlgNrmData
 		vFlgZeroSizeB
 		vFlgZeroSizeA
 		vIdqABs
+		vIdqABsR
+		vaIdqABs
 		vIds
 		vIqs
 		thE
@@ -69,39 +74,68 @@ classdef MbdModel < handle
 		end
 
 		%% Map生成用電流軸
-		function [cmIdqs, vIdqs, tids] = SetTgtIdqAxis(o, tIdqs)			% 解析電流条件妥当性
+		function [cmIdqs, vIdqs, tids] = SetTgtIdqAxis(o, taIdqs)
+			arguments (Input)
+				o		(1, 1)		MbdModel
+				taIdqs	(:, 4, 2)	double		% 2重系 電流解析条件
+			end
+			arguments (Output)
+				cmIdqs	(1, 2)		cell		% 対象(A=B / 非固定)電流条件
+				vIdqs	(:, 4)		double		% 上記線形並び
+				tids	(1, 4)		double		% 非固定・固定電流 idx 
+			end
+			
+			% 解析電流条件妥当性 tFlg: 対象(A=B / 非固定)電流条件
+			tIdqs = taIdqs(:, :, 1);
 			if all(abs(tIdqs(:, 1:2) - tIdqs(:, 3:4)) < o.eps, 2)
+				% A=B (正常状態）の場合のチェック
 				tFlg = [true, true, false, false];
+				if any(ismembertol(tIdqs(2,:), tIdqs(1,:), o.eps ...
+												, 'ByRows',true))
+					error("SetTgtIdqAxis: A=B時 重複電流条件有")
+				end
 				isSameAB = true;
 			else
+				% Idq(AB) どの条件が固定されているかチェック
 				tFlg = ~all(abs(tIdqs - tIdqs(1, :)) < o.eps, 1);
 				isSameAB = false;
 			end
 			cmIdqs = cell(1, 2);
-			if sum(tFlg) == 2
+			if sum(tFlg) == 2	% 2つの何れかの電流固定時のみ有効
 				[cmIdqs{:}] = meshgrid(o.cvIdqs{tFlg});
 				vmIdqs = reshape(permute(cat(3,cmIdqs{:}),[3,1,2]), 2,[])';
 				if isSameAB
 					vcs = vmIdqs;
 				else
-					vc0 = tIdqs(1, ~tFlg); % 固定値電流データ
-					vcs = repmat(vc0, size(vmIdqs,1), 1);
+					vc0 = tIdqs(1, ~tFlg); % 固定値電流データ (1x2)
+					vcs = repmat(vc0, size(vmIdqs,1), 1); % (n,2)に拡張
 				end
-				vIdqs = [vmIdqs, vcs];
+				vIdqs = [vmIdqs, vcs];	%
 				tids = [find(tFlg), find(~tFlg)];	% 元の列順に戻す
 				vIdqs(:, tids) = vIdqs;
 			else
 				error('マップ作成のためのAB相dq軸電流条件不正')
 			end
 		end
-		%% 補間データ抽出
+		%% 補間用元データ抽出
 		function ocDats = ExtractTgtData(o, flgs, isMap)
+			arguments (Input)
+				o		(1, 1) MbdModel % 自クラス
+				flgs	(:, 1) logical	% 線形flg 補間元データ 次元:解析：総解析数／map:総数
+				isMap	(1, 1) logical  % 0:解析結果, 1:定義済 map Data
+			end
+			arguments (Output)
+				ocDats	(1, :) cell		% 全結果毎map補間元Data
+			end
+
 			ocDats = cell(size(o.dats));
+			% 全解析結果毎
 			for i = 1:length(ocDats)
 				if ~isMap
-					d0 = o.dats{i};
+					d0 = o.dats{i}; % 個々Data [相・軸, 角度,(Dpx AB),総Data数]
+					% 最後の次元からデータ抽出 permuteした方が直観的(処理増）
 					sbs = repmat({':'}, 1, ndims(d0));
-					sbs{end} = flgs;
+					sbs{end} = flgs; % 　多次元map抽出用 idx セル
 					ocDats{i} = d0(sbs{:});
 				else
 					d0 = o.map{i};
@@ -111,26 +145,50 @@ classdef MbdModel < handle
 				end
 			end
 		end
-
-		%% Vector Idq軸データ (obsolete)
-		function vIdqABs = VctIdqABs(o)
-			cmIdqABs=cell(size(o.cvIdqs));
-			[cmIdqABs{[4,3,2,1]}]=ndgrid(o.cvIdqs{[2,1,4,3]});
-			vIdqABs = reshape(permute(cat(5, cmIdqABs{:}),[5,1:4]), 4,[])';
-		end
-	
 		%% 補間mapデータ作成
-		function GenMap(o, tDat, tIdqs, cmIdqs, mdFlg, i, isDef)
+		function GenMapReal(o, tDat, tIdqs, cmIdqs, mdFlg, i)
+			arguments (Input)
+				o		(1, 1) MbdModel % 自クラス
+				% 補間元データ (相・軸, 角度, Dpx(AB), IqA, IdA, IqB, IdB)
+				tDat	(:, :, :, :) double	% 補間元データ (IqA, IdA, IqB, IdB)
+				tIdqs	(:, 2) double	% 2重系 電流解析条件(除固定電流値)
+				cmIdqs	(1, 2) cell		% 
+				mdFlg	(:, 1) logical	%_ 補間用解析結果対象線形フラグ
+				i		(1, 1) int32	% 対象データ idx
+			end
+		end
+
+		%% 補間mapデータ作成
+		function GenMap(o, tDat, taIdqs, cmIdqs, tids, mdFlg, i)
+			arguments (Input)
+				o		(1, 1) MbdModel % 自クラス
+				% 補間元データ (相・軸, 角度, Dpx(AB), IqA, IdA, IqB, IdB)
+				tDat	(:, :, :, :) double	% 補間元データ (IqA, IdA, IqB, IdB)
+				taIdqs	(:, 4, 2)	 double	% 2重系 電流解析条件(除固定電流値)
+				cmIdqs	(1, 2) cell		% map 電流条件軸
+				tids	(1, 4) int32	% idx 対象/固定 電流条件
+				mdFlg	(:, 1) logical	% flg 補間用解析結果対象線形
+				i		(1, 1) int32	% idx 対象データ
+			end
+			isDef = o.sttSet(:) & mdFlg;	% 対象map Data定義済線形 flg
+			% tDat	:解析結果データ
+			% tIdqs	:解析結果電流条件
+			fprintf("GenMap: %12s %5d(%6d/%6d)[%5d]\n",o.datNames(i) ...
+					, sum(mdFlg), sum(o.sttSet(:)), size(o.sttSet(:), 1) ...
+					, sum(isDef));
+			tIdqs  = taIdqs(:, tids(1:2), 1);
+			rIdqAs = taIdqs(:, tids(1:2), 2);
+			rIdqBs = taIdqs(:, tids(3:4), 2);
 			for id1 = 1:size(tDat, 1)			% データ軸次元
 				for id3 = 1:size(tDat, 3)		% ２重系電流次元
 					% fprintf('>>>>>> [%04d]:Data Ax[%3d]- Side[%3d]]\n', i, id1, id3);
-					% nc = 0;
 					for id2 = 1:size(tDat, 2)	% 電気角次元 
 						tdv = squeeze(tDat(id1, id2, id3, :)); 
 						tIds = tIdqs(:, 1); tIqs = tIdqs(:, 2);
 						sfn = scatteredInterpolant(tIds, tIqs, tdv, "natural");
 						mdv = sfn(cmIdqs{1}, cmIdqs{2});
-						isDef0 = isDef(mdFlg);
+						isDef0 = isDef(mdFlg);	% 定義済マップデータ
+						% 定義済結果との差を確認
 						if sum(isDef)>0
 							cdv = squeeze(o.map{i}(id1, id2, id3, isDef));
 							if sum(isDef0) > 0
@@ -153,25 +211,29 @@ classdef MbdModel < handle
 			end
 			% 
 		end
-
-		function o = MakeDpxMapData(o, isTgt, isMap)
-			if nargin < 3
-				isMap = false;
+		%% ２重系Motorモデルマップ作成
+		function MakeDpxMapData(o, isTgt, isMap)
+			arguments (Input)
+				o		(1, 1) MbdModel % 自クラス
+				isTgt	(:, 1) logical	% 補間用 対象data線形フラグ
+				% 補間元DataType (0:解析結果, 1:補間済map)
+				isMap	(1, 1) logical = false
 			end
-
-			vmIdqABs = o.vMapIdqABs;
+			% vmIdqABs = o.vMapIqdABs;
+			idc = [2, 1, 4, 3];
+			vmIqdABs = o.vMapIqdABs; % map 電流条件軸(IqA, IdA, IqB, IdB)
 			if ~isMap
-				vIdqs = o.vIdqABs;
-				tvIdqABs = vIdqs(isTgt,:);			% 補間用解析結果Idq
+				tvaIdqABs = o.vaIdqABs(isTgt,:, :);		% 補間用解析結果Idq
 			else
-				tvIdqABs = vmIdqABs(isTgt,:);			% 補間用解析結果Idq軸			
+				tvIdqABs = vmIqdABs(isTgt, idc);	% 補間用解析結果Idq軸
+				tvaIdqABs = cat(3, tvIdqABs, CnvRealIdqs(tvIdqABs));
 			end
-			tDats = o.ExtractTgtData(isTgt, isMap);		% 補間用解析結果データ
-			[cmIdqs, tmIdqABs, tids] = o.SetTgtIdqAxis(tvIdqABs);	% 生成マップIdq軸
+			tDats = o.ExtractTgtData(isTgt, isMap);	% 補間用解析結果データ
+			[cmIdqs, tmIdqABs, tids] = o.SetTgtIdqAxis(tvaIdqABs); % 生成マップIdq軸
 
-			mdFlg = ismembertol(vmIdqABs, tmIdqABs, o.eps, 'ByRows',true);
+			mdFlg = ismembertol(vmIqdABs, tmIdqABs(:,idc) ... % 対象map線形インデックス
+											, o.eps, 'ByRows',true);
 
-			isDef = o.sttSet(:) & mdFlg;
 			th = o.ax(1,:); % o.ax 2 x 角度分解能
 			% 各解析結果毎計算
 			for i = 1:length(tDats)	
@@ -198,10 +260,8 @@ classdef MbdModel < handle
 					tdt = tDat;
 				end
 
-				o.GenMap(tdt, tvIdqABs(:,tids(1:2)), cmIdqs, mdFlg, i, isDef);
-				if i==2
-					dummy = 0;
-				end
+				% o.GenMap(tdt, tvaIdqABs(:,tids(1:2)), cmIdqs, mdFlg, i);
+				o.GenMap(tdt, tvaIdqABs, cmIdqs, tids, mdFlg, i);
 			end
 			o.sttSet(mdFlg) = true;
 		end
@@ -245,17 +305,18 @@ classdef MbdModel < handle
 			% 不均衡Idqデータマップの一部を解析結果から作成
 				% SideAB 何れかのIdq軸に一致しなければ，orphan となる
 			fprintf("======= unbalance status  \n");
-			vIdqs = o.vIdqABs;
-			mIdqs = o.vMapIdqABs;
+			% vIdqs = o.vIdqABs;
+			vIqds = o.vIdqABs(:,[2,1,4,3]);
+			mIdqs = o.vMapIqdABs;
 			tids = {1:2, 3:4};
 			ss = {'Side-A', 'Side-B'};
 			for nSide = 1:2
-				fpds = false(size(vIdqs, 1), 1); % 処理済データフラグ
+				fpds = false(size(vIqds, 1), 1); % 処理済データフラグ
 				tid = tids{nSide};
 				while ~all(fpds)
-					tvIdqs = vIdqs(~fpds, :);
+					tvIdqs = vIqds(~fpds, :);
 					tv	= tvIdqs(1, :);	%  解析 片側Idq値
-					fSm = all(abs(vIdqs(:, tid) - tv(tid)) < o.eps, 2); % 同一値抽出
+					fSm = all(abs(vIqds(:, tid) - tv(tid)) < o.eps, 2); % 同一値抽出
 					if any(fSm & fpds)
 						warning('Already processed Idq data');
 					end
@@ -280,7 +341,7 @@ classdef MbdModel < handle
 			% 不均衡データを含む完全mapデータを作成
 				% side-A 基準
 			rvs=o.rdIdIqs;	% ４隅のIdqデータ
-			cIdqs = o.cmMapIdqABs; 
+			cIdqs = o.cmMapIqdABs; 
 
 			fprintf("======= unbalance remained map making.  \n");
 			sz = o.szMapIdqABs;
@@ -291,6 +352,7 @@ classdef MbdModel < handle
 						fprintf("==== Side-B All map data defined. pass.\n");
 						continue;
 					end
+				
 					if ~all(tdFlg([1,end],[1,end]),"all")
 						warning("最大領域が外挿されます");
 					end
@@ -332,22 +394,26 @@ classdef MbdModel < handle
 			flg = all(abs(vIdqs(:, 1:2)) < 1.e-5, 2);
 		end
 
-		function cIdqs = get.cmMapIdqABs(o)
-			dIds = o.xIdms; dIqs = o.xIqms;
-			cIdqs={dIds, dIqs, dIds, dIqs};
-			
-			cIdqs=cell(size(cIdqs));
-			[cIdqs{[4,3,2,1]}]=ndgrid(o.cvIdqs{[2,1,4,3]});
+		function cIdqs = get.cmMapIqdABs(o)
+			cIdqs=cell(1, 4);
+			[cIdqs{:}]=ndgrid(o.cvIdqs{[2,1,4,3]});		
 		end
 
-		function vIdqs = get.vMapIdqABs(o)
-			vIdqs = reshape(permute(cat(5, o.cmMapIdqABs{:}),[5,1:4]), 4,[])';
+		function vIdqs = get.vMapIqdABs(o)
+			vIdqs = reshape(permute(cat(5, o.cmMapIqdABs{:}),[5,1:4]), 4,[])';
+		end
+
+		function v = get.vaIdqABs(o)
+			v=permute(o.cnds, [3,2,1]);
 		end
 
 		function v = get.vIdqABs(o)
 			v = squeeze(o.cnds(1,:,:))';
 		end
 
+		function v = get.vIdqABsR(o)
+			v = squeeze(o.cnds(2,:,:))';
+		end
 		function szv = get.szMapIdqABs(o)
 			dIds = o.xIdms; dIqs = o.xIqms;
 			cIdqs={dIds, dIqs, dIds, dIqs};
@@ -377,177 +443,6 @@ classdef MbdModel < handle
 			v = [repelem(rIds,size(rIqs,1),1), ...
 					repmat(rIqs, size(rIds,1),1)]; 
 		end
-
-		function o = MakeMotMap0(o)
-			n=[length(o.xIds), length(o.xIqs)];
-			nm=[length(o.xIdms), length(o.xIqms)];
-			% Normal Mode データ
-			fns = (o.dTyps(1,:)==0);
-			tIdqs = o.cnds(:,:, fns);
-			
-			mChk = false([nm, nm]);
-
-			vIds = o.xIdms; vIqs = o.xIqms;
-			[mIdNs, mIqNs]=meshgrid(vIds, vIqs);
-
-			[mIqAs, mIdAs, mIqBs, mIdBs] = ndgrid(vIqs, vIds, vIqs, vIds);
-			sIdqABs = [mIdAs(:), mIqAs(:), mIdBs(:), mIqBs(:)];
-			ss=sortrows(sIdqABs,1:4);
-			% マップ用に処理する全てのIdq(A-B) データ組合せを行方向で作成
-			sIdqs = squeeze(tIdqs(1,:,:))'; % IdIq org指令 (IdA, IqA, IdB, IqB) x 解析データ数
-
-			th=o.ax(1,:);
-
-			Fas = o.dats{3};
-			Fas0 = o.dats{3}(:,:,:,fns);
-			
-			Fdqn = CnvUVWtoDQ(Fas0, th);
-			
-			sCnv = scatteredInterpolant(sIdqs(:,1),sIdqs(:,2), squeeze(Fdqn(1,1,1,:)), "natural");
-			mapF = sCnv(mIdNs, mIqNs);
-			isM0=sCnv(mIdNs, mIqNs);
-
-			% 処理した並びにフラグをセットする
-			f = false(1, size(sIdqs,1));
-			isM0 = repmat([mIdNs(:), mIqNs(:)],[1,2]);
-			nflg = ismembertol(sIdqs,isM0,1.e-5, 'ByRows', true)';
-			if any(f & nflg)
-				warning('Already processed data exists.');
-			end
-			f = f | nflg;		% 既に処理した組合せのフラグをセット
-
-			sIds = sIdqs(:,1); sIqs = sIdqs(:,2);
-			nc = 0;
-			mFdqN = repmat({zeros([size(mIdNs), length(th)])},size(Fdqn,3),size(Fdqn,1));
-			for i = 1:size(Fdqn,1)		% AxD, AxQ, Vz
-				for j = 1:size(Fdqn, 3)	% SideA, SideB
-					for k = 1:size(Fdqn, 2) % theta
-						nc = nc + 1;
-						fa = squeeze(Fdqn(i, k, j, :));
-						sfn = scatteredInterpolant(sIds, sIqs, fa, "natural");
-						fm = sfn(mIdNs, mIqNs);
-						mFdqN{j, i}(:,:, k) = fm;
-						if mod(nc, 5) == 0
-							fprintf("DQ-Axis:(%03d/%03d) theta:%03d\n", i, j, k);
-						end
-					end
-				end
-			end
-			as = 1;
-
-
-		end
-
-		function m = MakeMap(o)
-			% 定義データ
-			cds = o.cnds;
-			flgMds = false(1,size(o.dTyps,2));	% 解析結果処理フラグ
-			tIdqs = squeeze(cds(1,:,:));		% 解析電流条件 Idq(AB) x 解析データ数
-			
-			% map 作成
-			vIds = o.xIdms; vIqs = o.xIqms;		% Id, Iq map 分解能
-			[mId0s, mIq0s]=meshgrid(vIds, vIqs);
-			[mIqA0s, mIdA0s, mIqB0s, mIdB0s] = ndgrid(vIqs, vIds, vIqs, vIds);
-			sIdqABs0 = [mIdA0s(:), mIqA0s(:), mIdB0s(:), mIqB0s(:)];
-			sIdqAB0s  = sortrows(sIdqABs0,1:4);	% 2重系 Idq map 組合せ　A-B 昇順
-			
-			fmPcd = false(1, size(sIdqAB0s, 1));	% map データ処理済フラグ
-			
-			% o.dats cell データ長 5 Torque, Current, Flux, Va, Vt
-			% 1,145,487 - 3, 145,2,487 ...
-			th = o.ax(1,:);		% 電気角 row
-			nth = length(th);
-			nd = length(o.dats);
-			
-			% for id = 1:nd
-			% 	tds0 = o.dats{id};	% 処理対象データ
-			% 	nds = size(tds0, 1);	% 処理データ次元 3:3相データ 1:トルク
-			% 	ntd = size(td2, 2); % 電気角方向データ数
-			% 	for idt = 0:3			% 2重系解析データタイプ
-				% 	flgMt = o.dTyps(1,:) == 3;
-				% 	if any(flgMds & flgMt)
-					% 	warning('Already Processed Data Exists.')
-				% 	end
-				% 	if nth ~= ntd
-					% 	warning('not match th-Dir. Num [%3d]/[%3d]', nth, ntd);
-					% 	continue;
-				% 	end
-				% 	if nds == 1
-				% 	elseif nds == 3
-				% 	end
-				% 	%
-				% 	flgMds = flgMds | flgMt;
-			% 	end
-			% end
-			for idt = 0:3			% 2重系解析データタイプ
-				flgMt = o.dTyps(1,:) == idt;
-				if any(flgMds & flgMt)                                                                           
-					warning('Already Processed Data Exists.')
-				end
-				%
-				if idt == 0
-					mIdqs = [mId0s(:), mIq0s(:), mId0s(:), mIq0s(:)];
-					[f0, mIdx0] = ismembertol(sIdqAB0s, mIdqs, 1.e-3, 'ByRows', true);
-					% id0c = sortrows([mIdx0(mIdx0>0), find(mIdx0)]);
-					t0 = find(f0);
-					id0c = [mIdx0(t0), t0];
-					if size(id0c,1) ~= size(mIdqs0, 1)
-						warning('Not macthed N0 Condition Exist');
-					end
-				end
-				for id = 1:nd
-					tds0 = o.dats{id};	% 処理対象データ
-					nds = size(tds0, 1);	% 処理データ次元 3:3相データ 1:トルク
-					ntd = size(tds0, 2); % 電気角方向データ数
-					if nds == 3
-						tds1 = CnvUVWtoDQ(tds0, th);
-					else
-						tds1 = reshape(tds0, 1, length(th), 1, []);
-					end
-					nta = size(tds1,3);                          
-					subs = repmat({':'}, 1, ndims(tds1));
-					subs{end} = flgMt;
-					tds = tds1{subs{:}};	% 処理対象データ抽出
-					if nth ~= ntd
-						warning('not match th-Dir. Num [%3d]/[%3d]', nth, ntd);
-						continue;
-					end
-					tIdqABs = tIdqs(1, flgMds);
-					tIdAs = tIdqs(1, flgMds); tIqAs = tIdqs(2, flgMds);
-					tIdBs = tIdqs(3, flgMds); tIqBs = tIdqs(4, flgMds);
-					for in0 = 1:nds
-						for in1 = 1:ntd
-							for in2 = n
-							end
-						end
-					end
-					if nds == 1
-					elseif nds == 3
-					end
-				end
-				%
-				flgMds = flgMds | flgMt;
-			end
-
-			for id = 1:nd
-				tds0 = o.dats{id};	% 処理対象データ
-				nds = size(tds0, 1);	% 処理データ次元 3:3相データ 1:トルク
-				ntd = size(td2, 2); % 電気角方向データ数
-				if nth ~= ntd
-					warning('not match th-Dir. Num [%3d]/[%3d]', nth, ntd);
-					continue;
-				end
-				if nds == 1
-				elseif nds == 3
-				end
-			end
-			for nt = 0:3
-				isTgt = (o.dTyps(1, :) == nt);
-			end
-			m = 0;
-		end
-
-
 
 		function v = vDpxTri(o, idx)
 			% th=o.ax(1,:)';
