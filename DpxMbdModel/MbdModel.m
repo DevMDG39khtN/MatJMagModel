@@ -1,9 +1,9 @@
 classdef MbdModel < handle & matlab.mixin.Copyable
 	properties(Constant)
-		xIds = [-6000:500:-1500, -1200:100:200, 500:500:6000];
-		xIqs = [0:100:1200, 1500:500:6000];
-		xIdms = [-6000:1000:-1500, -1200:200:200, 1000:1000:6000];
-		xIqms = [0:200:1200, 2000:1000:6000];
+		xIds = [-6000:500:-1500, -1200:100:200, 500:500:6000]/2;
+		xIqs = [0:100:1200, 1500:500:6000]/2;
+		xIdms = [-6000:1000:-1500, -1200:200:200, 1000:1000:6000]/2;
+		xIqms = [0:200:1200, 2000:1000:6000]/2;
 
 		datNames = ["Torque", "Current", "Flux", "Ph  Vlt", "Trm Vlt" ...
 									, "Ph  Flx Vlt", "Trm Flx Vlt"]
@@ -19,7 +19,7 @@ classdef MbdModel < handle & matlab.mixin.Copyable
 	properties(SetAccess=private, GetAccess=public)
 		eps = 1.e-5;
 		dFmt = "%8.1f"
-		
+		withRgn	(1, 1) logical = false
 		map = {};
 		sttSet = [];
 	end
@@ -69,8 +69,8 @@ classdef MbdModel < handle & matlab.mixin.Copyable
 					nd = ndims(td);
 				end
 				o.map{i} = nan([size(td, 1:nd-1), o.szMapIdqABs]);
-				o.sttSet = false(o.szMapIdqABs);
 			end
+			o.sttSet = false(o.szMapIdqABs);
 		end
 
 		%% Map生成用電流軸
@@ -173,9 +173,9 @@ classdef MbdModel < handle & matlab.mixin.Copyable
 			isDef = o.sttSet(:) & mdFlg;	% 対象map Data定義済線形 flg
 			% tDat	:解析結果データ
 			% tIdqs	:解析結果電流条件
-			fprintf("GenMap: %12s %5d(%6d/%6d)[%5d]\n",o.datNames(i) ...
-					, sum(mdFlg), sum(o.sttSet(:)), size(o.sttSet(:), 1) ...
-					, sum(isDef));
+			% fprintf("GenMap: %12s %5d(%6d/%6d)[%5d]\n",o.datNames(i) ...
+				% 	, sum(mdFlg), sum(o.sttSet(:)), size(o.sttSet(:), 1) ...
+				% 	, sum(isDef));
 			tIdqs  = taIdqs(:, tids(1:2), 1);
 			rIdqAs = taIdqs(:, tids(1:2), 2);
 			rIdqBs = taIdqs(:, tids(3:4), 2);
@@ -187,6 +187,39 @@ classdef MbdModel < handle & matlab.mixin.Copyable
 						tIds = tIdqs(:, 1); tIqs = tIdqs(:, 2);
 						sfn = scatteredInterpolant(tIds, tIqs, tdv, "natural");
 						mdv = sfn(cmIdqs{1}, cmIdqs{2});
+						
+						% 変換でq軸対称性を担保できるか調べたができなかった
+						% tafD=reshape(squeeze(o.map{3}(1,1,1,taf)),23,19);
+						% tafQ=reshape(squeeze(o.map{3}(2,1,1,taf)),23,19);
+						% figure;
+						% contourf(o.vIds*2,o.vIqs*2,tafD/2, -0.2:0.01:0.2,'ShowText', 'on')						
+						% figure;
+						% contourf(o.vIds*2,o.vIqs*2,tafQ/2, -0.2:0.01:0.2,'ShowText', 'on');
+						% 
+						% figure;
+						% contourf(o.vIds*2,o.vIqs*2,mdv/2, -0.2:0.01:0.2,'ShowText', 'on')
+						% tfa0=~(tIdqs(:,2)<0);
+						% mId0=cmIdqs{1}(12:end,:);
+						% mIq0=cmIdqs{2}(12:end,:);
+						% 
+						% sfn0 = scatteredInterpolant(tIds(tfa0), tIqs(tfa0), tdv0, "natural");
+						% mdv0=sfn0(mId0,mIq0);
+						% figure;
+						% contourf(mId0(1,:)*2,mIq0(:,1)'*2, mdv0/2, -0.2:0.01:0.2,'ShowText', 'on')
+						% ax0=gca; ax0.XLim=[-2000, 2000]; ax0.YLim=[-2000 2000];
+						% grid o
+						% sfn1a = scatteredInterpolant(rIdqAs(tfa0,1), rIdqAs(tfa0,2), tdv0, "natural");
+						% sfn1a = scatteredInterpolant(rIdqAs(tfa0,1), rIdqAs(tfa0,2), tdv0, "natural");
+						% mdv1a=sfn1a(mId0,mIq0);
+						% figure;
+						% contourf(mId0(1,:)*2,mIq0(:,1)'*2, mdv1a/2, -0.2:0.01:0.2,'ShowText', 'on')
+						% 
+						% sIdqAB0=[mId0(:), mIq0(:),mId0(:), mIq0(:)];
+						% sIdqABR0=CnvRealIdqs(sIdqAB0);
+						% sIdqB0=sIdqABR0(:,3:4);
+						% sfn1b = scatteredInterpolant(sIdqB0(:,1), sIdqB0(:,2), mdv1a(:), "natural");
+						% mdv1b=sfn1b(mId0,mIq0);
+						
 						isDef0 = isDef(mdFlg);	% 定義済マップデータ
 						% 定義済結果との差を確認
 						if sum(isDef)>0
@@ -293,7 +326,12 @@ classdef MbdModel < handle & matlab.mixin.Copyable
 			o.dPNams = ncd;
 		end
 
-		function o = MakeDpxMotMap(o)
+		function o = MakeDpxMotMap(o, withRgn)
+			arguments (Input)
+				o		(1, 1) MbdModel % 自クラス
+				withRgn	(1, 1) logical = false
+			end
+			o.withRgn = withRgn;
 			o.InitMap();
 			fprintf("=======   normal   status : IdqA == IdqB\n");
 			o.MakeDpxMapData(o.vFlgNrmData);
@@ -327,13 +365,16 @@ classdef MbdModel < handle & matlab.mixin.Copyable
 						fprintf("all data processed @ %s\n", o.sprintv(o.dFmt, tv));
 						continue;
 					end
-					fprintf("===== %s[%4d]: %s\n", ...
-							ss{nSide}, sum(fSm), o.sprintv(o.dFmt, tv(tid)));
+					% fprintf("===== %s[%4d]: %s\n", ...
+						% 	ss{nSide}, sum(fSm), o.sprintv(o.dFmt, tv(tid)));
 					if sum(fSm) < 4
-						fprintf("======== pass\n");
+					% 	fprintf("======== pass\n");
 					else
+						fprintf("===== %s[%4d]: %s\n", ...
+							ss{nSide}, sum(fSm), o.sprintv(o.dFmt, tv(tid)));
 						o.MakeDpxMapData(fSm, false);
 					end
+
 					% tvs = tvIdqs(fSm, :);
 				end
 			end
@@ -415,7 +456,11 @@ classdef MbdModel < handle & matlab.mixin.Copyable
 			v = squeeze(o.cnds(2,:,:))';
 		end
 		function szv = get.szMapIdqABs(o)
-			dIds = o.xIdms; dIqs = o.xIqms;
+			% dIds = o.xIdms; dIqs = o.xIqms;
+			% if o.withRgn
+			% 	dIqs = [-o.xIqms(end:-1:2), dIqs];
+			% end
+			dIds = o.vIds; dIqs = o.vIqs;
 			cIdqs={dIds, dIqs, dIds, dIqs};
 
 			szv = cellfun(@length, cIdqs([2,1,4,3]));
@@ -435,6 +480,9 @@ classdef MbdModel < handle & matlab.mixin.Copyable
 
 		function v = get.vIqs(o)
 			v = o.xIqms;
+			if o.withRgn
+				v = [-o.xIqms(end:-1:2), v];
+			end
 		end
 
 		function v = get.rdIdIqs(o)
