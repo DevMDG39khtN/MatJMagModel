@@ -409,8 +409,7 @@ classdef MbdModel < handle & matlab.mixin.Copyable
 		end
 
 
-		function [fMapAd1, fMapAq1, fMapBd1, fMapBq1 ...
-				, fMapAd2, fMapAq2, fMapBd2, fMapBq2] = MapFdqtoIdq(o)
+		function MapFdqtoIdq(o)
 			mIqds = o.vMapIqdABs;
 			tIqdAs = o.vMapIqdABs(:, 1:2); tIqdBs = o.vMapIqdABs(:, 3:4);
 			iqdABns = o.vIdqABs(all(o.dTyps == 0, 1), :);
@@ -426,168 +425,50 @@ classdef MbdModel < handle & matlab.mixin.Copyable
 
 			vfd0=[-180:20:-60, -40:5:120 140:20:180];
 			vfq0=[-280:20:-120, -100:5:40, 60:20:160];
-			vfd1=[-40:5:120]; vfq1=[-100:5:40];
-			vfd1=[-10:5:10]; vfq1=[-10:5:10];
 			[mFds, mFqs] = meshgrid(vfd0, vfq0);
-			[mFds, mFqs] = meshgrid(vfd1, vfq1);
-			szf=size(mFds);
+
 			% mIdqs = permute(reshape(mIqds, [o.szMapIqdABs, 4]),[5,1:4]);
-			% mIqds = permute(reshape(mIqds, [o.szMapIqdABs, 4]),[1:2, 5,3:4]);
-			mIqds = reshape(mIqds, [o.szMapIqdABs, 4]);
+			mIqds = permute(reshape(mIqds, [o.szMapIqdABs, 4]),[1:2, 5,3:4]);
 			fds = permute(fds, [2, 3, 1]);
 			ss = {'Side-A', 'Side-B'};
 			nSide = 1;
 			szm = o.szMapIqdABs;
 
-			fMapAd1 = nan([szf, szm(3:4), 2]);
-			fMapB0 = nan([szm(1:2), szf, 2]);
-			fMap0s = nan([szf, szf, 2, szt, 2]);
-		
+			fMapA0 = nan([size(mFds), o.szMapIqdABs(3:4), 2, size(fds, 3)]);
+			fMaps = nan([size(mFds), size(mFds), 2, szt, 2]);
 			nn = 0;
-
-			fvId0 = o.vIds; fvIq0 =o.vIqs;
-			fidId = find(fvId0>-500-o.eps & fvId0<o.eps); % Data Idx Id
-			fidIq = find(fvIq0>-o.eps & fvIq0<500-o.eps); % Data Idx Iq
-			faIqdAB = o.vMapIqdABs;
-			faIqAB = faIqdAB(:,[1,3]); faIdAB=faIqdAB(:,[2,4]);	% q , d
-			fgIdAB = faIdAB > -500-o.eps & faIdAB < o.eps;
-			fgIqAB = faIqAB > -o.eps & faIqAB < 500-o.eps;
-			fsIqdAB = faIqdAB(all([fgIdAB fgIqAB], 2), :); % 電流条件
-			[fmIds, fmIqs] = meshgrid(fvId0(fidId), fvIq0(fidIq));
-			fvIds =fmIds(1,:); fvIqs = fmIqs(:,1)';
-			fsFmap = o.map{3}(1:2,:,:,fidIq,fidId,fidIq,fidId);
-			i0s = 1:size(fmIds,2); j0s = 1:size(fmIds,1);
-
-			f0m = reshape(permute(fsFmap,[4:7,2,1,3]),[],4);
-			f0r = MbdModel.MinMax(f0m);
-			f1d = -40:20:100; f1q = -40:20:80;
-			[f2d, f2q] = meshgrid(f1d, f1q);
-			i1s = 1:size(f2d,2); j1s = 1:size(f2q,1);
-
-			fMapAd1 =nan([size(f2d), size(fmIds)]);
-			fMapAd2 =nan([size(fmIds), size(f2d)]);
-			fMapAq1 =nan([size(f2d), size(fmIds)]);
-			fMapAq2 =nan([size(fmIds), size(f2d)]);
-			fMapBd1 =nan([size(fmIds), size(f2d)]);
-			fMapBd2 =nan([size(f2d), size(fmIds)]);
-			fMapBq1 =nan([size(fmIds), size(f2d)]);
-			fMapBq2 =nan([size(f2d), size(fmIds)]);
-			
-			for i = 1:szt
-				d0d = squeeze(fsFmap(1, i, 1, :, :, :, :));
-				d0q = squeeze(fsFmap(2, i, 1, :, :, :, :));
-				d1d = squeeze(fsFmap(1, i, 2, :, :, :, :));
-				d1q = squeeze(fsFmap(2, i, 2, :, :, :, :));
-
-				for mi = i0s
-					for mj = j0s
-						dad = d0d(:,:,mj,mi);
-						daq = d0q(:,:,mj,mi);
-						sfnDA = scatteredInterpolant(dad(:), daq(:), fmIds(:), "natural");
-						sfnQA = scatteredInterpolant(dad(:), daq(:), fmIqs(:), "natural");
-						d2dA = sfnDA(f2d, f2q);
-						d2qA = sfnQA(f2d, f2q);
-						fMapAd1(:,:,mj,mi) = d2dA; 
-						fMapAq1(:,:,mj,mi) = d2qA; 
-
-						dad = d0d(mj,mi,:,:);
-						daq = d0q(mj,mi,:,:);
-						sfnDA = scatteredInterpolant(dad(:), daq(:), fmIds(:), "natural");
-						sfnQA = scatteredInterpolant(dad(:), daq(:), fmIqs(:), "natural");
-						d2dA = sfnDA(f2d, f2q);
-						d2qA = sfnQA(f2d, f2q);
-						fMapAd2(mj,mi,:,:) = d2dA; 
-						fMapAq2(mj,mi,:,:) = d2qA; 						
-
-						dbd = d1d(mj,mi, :,:);
-						dbq = d1q(mj,mi, :,:);
-						sfnDB = scatteredInterpolant(dbd(:), dbq(:), fmIds(:), "natural");
-						sfnQB = scatteredInterpolant(dbd(:), dbq(:), fmIqs(:), "natural");
-						d2dB = sfnDB(f2d, f2q);
-						d2qB = sfnQB(f2d, f2q);
-						fMapBd1(mj,mi,:,:) = d2dB; 
-						fMapBq1(mj,mi,:,:) = d2qB; 
-
-						dbd = d1d(:,:, mj,mi);
-						dbq = d1q(:,:, mj,mi);
-						sfnDB = scatteredInterpolant(dbd(:), dbq(:), fmIds(:), "natural");
-						sfnQB = scatteredInterpolant(dbd(:), dbq(:), fmIqs(:), "natural");
-						d2dB = sfnDB(f2d, f2q);
-						d2qB = sfnQB(f2d, f2q);
-						fMapBd2(:,:, mj,mi) = d2dB; 
-						fMapBq2(:,:, mj,mi) = d2qB;
-					end
-				end
-
-				% for m1 = i1s
-				% 	for m2 = j1s
-					% 	dbd1 = d1d(mj,mi, :,:);
-					% 	dbq1 = d1q(mj,mi, :,:);
-				% 	end
-				% end
-				break;
-			end
-
-			return
-
-
 
 			for i = 1:szt
 				fd0 = fds(:, :, i);
-				fd0 = reshape(fd0, [szm, 4]);
-				% fd0 = permute(fd0,[1:2,5,3:4]);
-				% %permute(fd0, [5, 1:4]);
+				fd0 = reshape(fd0, [o.szMapIqdABs, 4]);
+				fd0 = permute(fd0,[1:2,5,3:4]);
+				%permute(fd0, [5, 1:4]);
 				fprintf("Convert fMapA0@ θ: %3d/(%3d)\n", i, size(fds,3));
 				for mi = 1:szm(3)
 					% fprintf("Convert @ IdA %3d/(%3d)\n", mi, o.szMapIqdABs(3));
-					for mj = 1:szm(4)
-						tIdqs = squeeze(mIqds(:,:, mi,mj, [2,1]));
-						fd = squeeze(fd0(:,:, mi,mj , 1:2));
+					for mj = szm(4)
+						tIdqs = mIqds(:,:, [2,1], mi,mj);
+						fd = fd0(:,:, :, mi,mj);
 						fdD=fd(:,:,1); fdQ=fd(:,:,2);
 						tD=tIdqs(:,:,1); tQ=tIdqs(:,:,2);
-						sfnDA = scatteredInterpolant(fdD(:), fdQ(:), tD(:), "natural");
-						sfnQA = scatteredInterpolant(fdD(:), fdQ(:), tQ(:), "natural");
-						mDA = sfnDA(mFds, mFqs);
-						mQA = sfnQA(mFds, mFqs);
-						fMapAd1(:,:, mi,mj, 1) = mDA;
-						fMapAd1(:,:, mi,mj, 2) = mQA;
-
-						tIdqs = squeeze(mIqds(mi,mj, :,:, [4,3]));
-						fd = squeeze(fd0(mi,mj, :,:, 3:4));
-						fdD=fd(:,:,1); fdQ=fd(:,:,2);
-						tD=tIdqs(:,:,1); tQ=tIdqs(:,:,2);
-						sfnDB = scatteredInterpolant(fdD(:), fdQ(:), tD(:), "natural");
-						sfnQB = scatteredInterpolant(fdD(:), fdQ(:), tQ(:), "natural");
-						mDB = sfnDB(mFds, mFqs);
-						mQB = sfnQB(mFds, mFqs);
-						fMapB0(mi,mj, :,:, 1) = mDB;
-						fMapB0(mi,mj, :,:, 2) = mQB;
-						nn = nn + numel(mDA)*4;
+						sfnD = scatteredInterpolant(fdD(:), fdQ(:), tD(:), "natural");
+						sfnQ = scatteredInterpolant(fdD(:), fdQ(:), tQ(:), "natural");
+						mD = sfnD(mFds, mFqs);
+						fMapA0(:,:,mi,mj, 1, i) = mD; 
+						mQ = sfnQ(mFds, mFqs);
+						fMapA0(:,:,mi,mj, 2, i) = mQ; 
+						
+						
+						nn = nn + numel(mD)*2;
 					end
 				end
-
-				fMapAt = nan([szf, 2]);
-				fMapBt = nan([szf, 2]);
-				for m1 = 1:szf(1)
-					for m2 = 1:szf(2)
-						for mi = 1:szm(3)
-							% fprintf("Convert @ IdA %3d/(%3d)\n", mi, o.szMapIqdABs(3));
-							idqBs = squeeze(fMapB0(m1,m2, :,:, :));
-							mIdB = idqBs(:,:,1); mIqB = idqBs(:,:,2);
-							for mj = 1:szm(4)
-								fd = squeeze(fd0(:,:, mi,mj , 3:4));
-								fdD=fd(:,:,1); fdQ=fd(:,:,2);
-								sfnDA = scatteredInterpolant(mIds(:), mIqA(:), fdD(:), "natural");
-								sfnQA = scatteredInterpolant(mIdB(:), mIqA(:), fdQ(:), "natural");
-								mDA = sfnDA(mFds, mFqs);
-								mQA = sfnQA(mFds, mFqs);
-							end
-						end
+				for m1 = 1:szm(1)
+					for m2 = 1:szm(2)
+						idA = t
 					end
 				end
 			end
-
-			if sum(isnan(fMapAd1),'all')
+			if sum(isnan(fMapA0),'all')
 			end
 
 			fMapB0 = nan([o.szMapIqdABs(3:4), size(mFds), 2, size(fds, 3)]);
@@ -598,15 +479,15 @@ classdef MbdModel < handle & matlab.mixin.Copyable
 				fprintf("Convert fMapB@ θ: %3d/(%3d)\n", i, size(fds,3));
 				for mi = 1:size(fMapB0, 1)
 					for mj = 1:size(fMapB0, 2)
-						iad = squeeze(fMapAd1(mi, mj, :, :, :, i));
+						iad = squeeze(fMapA0(mi, mj, :, :, :, i));
 
 						fd = fd0(:,:, :, mi,mj);
 						idD=iad(:,:,1); fdQ=iaD(:,:,2);
-						sfnDA = scatteredInterpolant(fdD(:), fdQ(:), mIds(:), "natural");
-						sfnQA = scatteredInterpolant(fdD(:), fdQ(:), mIqs(:), "natural");
-						mD = sfnDA(mFds, mFqs);
+						sfnD = scatteredInterpolant(fdD(:), fdQ(:), mIds(:), "natural");
+						sfnQ = scatteredInterpolant(fdD(:), fdQ(:), mIqs(:), "natural");
+						mD = sfnD(mFds, mFqs);
 						fMapB0(mi,mj, :,:, 1, i) = mD; 
-						mQ = sfnQA(mFds, mFqs);
+						mQ = sfnQ(mFds, mFqs);
 						fMapB0(mi,mj, :,:, 2, i) = mQ; 
 						nn = nn + numel(mD)*2;
 					end
@@ -616,21 +497,17 @@ classdef MbdModel < handle & matlab.mixin.Copyable
 			fMapA = nan([size(mFds), size(mFds), 2, size(fds, 3)]);
 			for i = 1:size(fMapA, size(fds, 3))
 				fprintf("Convert fMapB@ θ: %3d/(%3d)\n", i, size(fds,3));
-				for mi = 1:size(fMapAd1, 1)
-					for mj = 1:size(fMapAd1, 2)
-						for mi = 1:size(fMapB0, 1)
-							for mj = 1:size(fMapB0, 2)
-								fd = squeeze(fMapAd1(mi, mj, :, :, :, i));
-								fdD=fd(:,:,1); fdQ=fd(:,:,2);
-								sfnDA = scatteredInterpolant(fdD(:), fdQ(:), mIds(:), "natural");
-								sfnQA = scatteredInterpolant(fdD(:), fdQ(:), mIqs(:), "natural");
-								mD = sfnDA(mFds, mFqs);
-								fMapB(mi,mj, :,:, 1, i) = mD; 
-								mQ = sfnQA(mFds, mFqs);
-								fMapB(mi,mj, :,:, 2, i) = mQ; 
-								nn = nn + numel(mD)*2;
-							end
-						end
+				for mi = 1:size(fMapA0, 1)
+					for mj = 1:size(fMapA0, 2)
+						fd = squeeze(fMapA0(mi, mj, :, :, :, i));
+						fdD=fd(:,:,1); fdQ=fd(:,:,2);
+						sfnD = scatteredInterpolant(fdD(:), fdQ(:), mIds(:), "natural");
+						sfnQ = scatteredInterpolant(fdD(:), fdQ(:), mIqs(:), "natural");
+						mD = sfnD(mFds, mFqs);
+						fMapB(mi,mj, :,:, 1, i) = mD; 
+						mQ = sfnQ(mFds, mFqs);
+						fMapB(mi,mj, :,:, 2, i) = mQ; 
+						nn = nn + numel(mD)*2;
 					end
 				end
 			end
